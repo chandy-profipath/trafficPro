@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'expo-router';
-import { View, StyleSheet, StatusBar, Alert, Text } from 'react-native';
-import { TouchableOpacity } from 'react-native';
+import { View, StyleSheet, StatusBar, Alert, Text, TextInput, ScrollView, TouchableOpacity } from 'react-native';
+import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Accelerometer } from 'expo-sensors';
 import { useTheme } from '../theme';
 import MapCanvas from '../components/MapCanvas';
@@ -34,6 +35,7 @@ import {
   fetchActiveParked,
   fetchPoisWithReports,
   insertHazard,
+  deleteHazard,
   registerParked,
   deregisterParked,
   subscribeHazards,
@@ -43,7 +45,7 @@ import {
   USER_ID,
 } from '../lib/db';
 
-type SheetKind = 'planner' | 'report' | 'mechanics' | 'services' | 'settings' | 'hazard' | 'chat' | 'spare_parts' | 'safety' | null;
+type SheetKind = 'planner' | 'report' | 'mechanics' | 'services' | 'settings' | 'hazard' | 'chat' | 'spare_parts' | 'safety' | 'my_shops' | null;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -57,7 +59,17 @@ export default function HomeScreen() {
   const setFullscreen = _fullscreenState[1];
 
   const [sheet, setSheet] = useState<SheetKind>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [roadCaptureActive, setRoadCaptureActive] = useState(false);
+  const [captureMenuVisible, setCaptureMenuVisible] = useState(false);
+  const [authPortalActive, setAuthPortalActive] = useState(false);
+  const [constructionPortalActive, setConstructionPortalActive] = useState(false);
+  const [operatorId, setOperatorId] = useState('');
+  const [operatorPin, setOperatorPin] = useState('');
+  const [myDeployedHazards, setMyDeployedHazards] = useState<any[]>([]);
+  const [selectedManualType, setSelectedManualType] = useState<HazardType>('pothole');
+  const [manualNote, setManualNote] = useState('');
+  const [manualSeverity, setManualSeverity] = useState<'low' | 'medium' | 'high'>('low');
   const [selectedHazard, setSelectedHazard] = useState<Hazard | null>(null);
   const [chatProvider, setChatProvider] = useState<ChatProvider | null>(null);
   const [telemetryMinimized, setTelemetryMinimized] = useState(false);
@@ -206,6 +218,11 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
+    supabase.auth.getUser().then((res: any) => {
+      const data = res?.data;
+      setUser(data?.user || null);
+    });
+
     fetchActiveParked().then((rows) => {
       const validRows = Array.isArray(rows) ? rows : [];
       setParkedPins(
@@ -321,7 +338,7 @@ export default function HomeScreen() {
           }
           _prevGpsCoords.current = { lat, lng, ts: now };
         }
-      } catch (e) {
+      } catch (e: any) {
         console.warn('[DriverPos] Could not read device location.', e);
         if (mounted) setDriverPos(null);
         if (mounted) setCurrentSpeed(0);
@@ -615,6 +632,10 @@ export default function HomeScreen() {
     severity: 'low' | 'medium' | 'high'
   ) => {
     setSheet(null);
+    if (!driverPos) {
+      Alert.alert('Location error', 'Driver location is not available. Please try again.');
+      return;
+    }
     try {
       await insertHazard({
         type,
@@ -654,7 +675,7 @@ export default function HomeScreen() {
           showHotels={layers.hotels}
           showMechanics={layers.mechanics}
           showHazards={layers.hazards && routeActive}
-          driverPos={driverPos}
+          driverPos={driverPos || { x: 50, y: 50 }}
           parkedPins={Array.isArray(parkedPins) ? parkedPins : []}
           hazards={Array.isArray(hazards) ? hazards : []}
           pois={dbPois}
@@ -724,7 +745,7 @@ export default function HomeScreen() {
         <ActionDock
           parked={parked}
           onTogglePark={() => { showControls(); handleTogglePark(); }}
-          onOpenCapture={() => setRoadCaptureActive(true)}
+          onOpenCapture={() => setCaptureMenuVisible(true)}
           onOpenSafety={() => setSheet('safety')}
           onOpenShop={() => setSheet('spare_parts')}
           onOpenProfile={() => {
@@ -811,6 +832,10 @@ export default function HomeScreen() {
           heightPct={85}
         >
         <MechanicsSheet 
+          onSelect={(m) => {
+            setSheet(null);
+            handleStartRoute('Current Location', m.name);
+          }}
           onChat={(m) => {
             setChatProvider({ id: m.id, name: m.name, type: 'mechanic' });
             setSheet('chat');
@@ -829,6 +854,10 @@ export default function HomeScreen() {
         <ServicesSheet 
           onOpenShop={() => setSheet('spare_parts')} 
           pois={dbPois}
+          onSelectPOI={(poi) => {
+            setSheet(null);
+            handleStartRoute('Current Location', poi.name);
+          }}
         />
       </BottomSheet>
 
@@ -840,7 +869,12 @@ export default function HomeScreen() {
         heightPct={85}
         scrollEnabled={false}
       >
-        <SparePartsSheet />
+        <SparePartsSheet 
+          onChat={(shop) => {
+            setChatProvider({ id: shop.id, name: shop.name, type: shop.type === 'Supplier' ? 'supplier' : 'mechanic' });
+            setSheet('chat');
+          }}
+        />
       </BottomSheet>
 
       <BottomSheet
@@ -850,7 +884,11 @@ export default function HomeScreen() {
         subtitle="Manage your shops and products"
         heightPct={85}
       >
-        <ShopManager />
+        <ShopManager 
+          user={user} 
+          userX={driverPos ? driverPos.x : 50} 
+          userY={driverPos ? driverPos.y : 50} 
+        />
       </BottomSheet>
 
       <BottomSheet
@@ -892,8 +930,416 @@ export default function HomeScreen() {
         {selectedHazard && <HazardDetail hazard={selectedHazard} />}
       </BottomSheet>
 
+      {/* 1. Diagnostic Optical Scan Selector Menu */}
+      <BottomSheet
+        visible={captureMenuVisible}
+        onClose={() => setCaptureMenuVisible(false)}
+        title="Diagnostic Optical Scan"
+        heightPct={45}
+      >
+        <View style={{ gap: 14, padding: 4 }}>
+          <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center', marginBottom: 6 }}>
+            Select your Sentinel scan method to monitor or deploy road status.
+          </Text>
+          
+          <TouchableOpacity 
+            style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              padding: 16, 
+              borderRadius: 16, 
+              backgroundColor: colors.surfaceElevated, 
+              borderWidth: 1.5, 
+              borderColor: colors.border 
+            }}
+            onPress={() => {
+              setCaptureMenuVisible(false);
+              setRoadCaptureActive(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialCommunityIcons name="video-wireless-outline" size={22} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={{ color: colors.text, fontWeight: '800', fontSize: 14 }}>Sentinel Camera Scanning</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>Activates real-time AI optical scanning & accelerometer sensors.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              padding: 16, 
+              borderRadius: 16, 
+              backgroundColor: colors.surfaceElevated, 
+              borderWidth: 1.5, 
+              borderColor: colors.border 
+            }}
+            onPress={() => {
+              setCaptureMenuVisible(false);
+              setAuthPortalActive(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.accent + '15', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialCommunityIcons name="hammer-wrench" size={20} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={{ color: colors.text, fontWeight: '800', fontSize: 14 }}>Manual Construction Portal</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>For certified construction users to manually deploy and dismantle hazards.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
+
+      {/* 2. Construction Authority Secure Gateway */}
+      <BottomSheet
+        visible={authPortalActive}
+        onClose={() => {
+          setAuthPortalActive(false);
+          setOperatorId('');
+          setOperatorPin('');
+        }}
+        title="Construction Authority Gateway"
+        heightPct={55}
+      >
+        <View style={{ padding: 4 }}>
+          <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15, marginBottom: 4 }}>Authorized Personnel Only</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 16 }}>
+            Please input your Operator ID and secure PIN to manage active corridor hazards. (Hint: ID 777, PIN 2026)
+          </Text>
+
+          <View style={{ gap: 12 }}>
+            <View>
+              <Text style={{ color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 6, textTransform: 'uppercase' }}>Operator ID Number</Text>
+              <TextInput
+                placeholder="Enter Operator ID"
+                placeholderTextColor={colors.textMuted}
+                value={operatorId}
+                onChangeText={setOperatorId}
+                keyboardType="numeric"
+                style={{ 
+                  height: 48, 
+                  borderWidth: 1.5, 
+                  borderColor: colors.border, 
+                  borderRadius: 12, 
+                  paddingHorizontal: 14, 
+                  color: colors.text, 
+                  backgroundColor: colors.surfaceElevated,
+                  fontWeight: '600'
+                }}
+              />
+            </View>
+
+            <View>
+              <Text style={{ color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 6, textTransform: 'uppercase' }}>Authorization PIN</Text>
+              <TextInput
+                placeholder="Enter 4-Digit PIN"
+                placeholderTextColor={colors.textMuted}
+                value={operatorPin}
+                onChangeText={setOperatorPin}
+                keyboardType="numeric"
+                secureTextEntry
+                style={{ 
+                  height: 48, 
+                  borderWidth: 1.5, 
+                  borderColor: colors.border, 
+                  borderRadius: 12, 
+                  paddingHorizontal: 14, 
+                  color: colors.text, 
+                  backgroundColor: colors.surfaceElevated,
+                  fontWeight: '600'
+                }}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={{ 
+                height: 48, 
+                borderRadius: 12, 
+                backgroundColor: colors.primary, 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                marginTop: 10,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 6,
+                elevation: 4
+              }}
+              onPress={() => {
+                if (operatorId === '777' && operatorPin === '2026') {
+                  setAuthPortalActive(false);
+                  setOperatorId('');
+                  setOperatorPin('');
+                  setConstructionPortalActive(true);
+                } else {
+                  Alert.alert('Access Denied', 'Invalid credentials. Hint: Operator ID 777, Secure PIN 2026.');
+                }
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Unlock Console</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </BottomSheet>
+
+      {/* 3. Construction Operator Deployment Hub */}
+      <BottomSheet
+        visible={constructionPortalActive}
+        onClose={() => setConstructionPortalActive(false)}
+        title="Construction Operator Hub"
+        heightPct={85}
+      >
+        <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+          <View style={{ padding: 4 }}>
+            {/* GPS coordinates lock header */}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              padding: 12, 
+              borderRadius: 12, 
+              backgroundColor: colors.success + '12', 
+              borderColor: colors.success, 
+              borderWidth: 1,
+              marginBottom: 16,
+              gap: 10
+            }}>
+              <Ionicons name="location" size={20} color={colors.success} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.success, fontWeight: '800', fontSize: 13 }}>GPS Core Coordinates Locked</Text>
+                <Text style={{ color: colors.text, fontSize: 11.5, fontWeight: '600', marginTop: 2 }}>
+                  X: {driverPos ? driverPos.x.toFixed(2) : '50.0'} · Y: {driverPos ? driverPos.y.toFixed(2) : '50.0'}
+                </Text>
+              </View>
+              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: colors.success }}>
+                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>LINKED</Text>
+              </View>
+            </View>
+
+            <Text style={{ color: colors.text, fontWeight: '800', fontSize: 14, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>1. Deploy New Hazard</Text>
+            
+            {/* Form Fields */}
+            <View style={{ gap: 12, marginBottom: 20 }}>
+              <View>
+                <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '800', marginBottom: 6 }}>SELECT HAZARD CATEGORY</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {(['pothole', 'debris', 'speed_bump', 'sharp_curve', 'parked_vehicle'] as HazardType[]).map((type) => {
+                    const isSelected = selectedManualType === type;
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        onPress={() => setSelectedManualType(type)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                          backgroundColor: isSelected ? colors.primary + '12' : colors.surfaceElevated,
+                        }}
+                      >
+                        <Text style={{ color: isSelected ? colors.primary : colors.text, fontSize: 11.5, fontWeight: '800', textTransform: 'capitalize' }}>
+                          {type.replace('_', ' ')}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View>
+                <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '800', marginBottom: 6 }}>HAZARD LABEL / TITLE</Text>
+                <TextInput
+                  placeholder="e.g. Active Excavator Crossing"
+                  placeholderTextColor={colors.textMuted}
+                  value={manualNote}
+                  onChangeText={setManualNote}
+                  style={{
+                    height: 44,
+                    borderWidth: 1.5,
+                    borderColor: colors.border,
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    color: colors.text,
+                    backgroundColor: colors.surfaceElevated,
+                    fontWeight: '600'
+                  }}
+                />
+              </View>
+
+              <View>
+                <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '800', marginBottom: 6 }}>SEVERITY LEVEL</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {(['low', 'medium', 'high'] as const).map((sev) => {
+                    const isSelected = manualSeverity === sev;
+                    const sevColors = {
+                      low: colors.primary,
+                      medium: colors.accent,
+                      high: colors.danger,
+                    };
+                    const activeColor = sevColors[sev];
+                    return (
+                      <TouchableOpacity
+                        key={sev}
+                        onPress={() => setManualSeverity(sev)}
+                        style={{
+                          flex: 1,
+                          height: 38,
+                          borderRadius: 10,
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? activeColor : colors.border,
+                          backgroundColor: isSelected ? activeColor + '12' : colors.surfaceElevated,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Text style={{ color: isSelected ? activeColor : colors.text, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' }}>
+                          {sev}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  height: 46,
+                  borderRadius: 12,
+                  backgroundColor: colors.primary,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: 8
+                }}
+                onPress={async () => {
+                  if (!manualNote.trim()) {
+                    Alert.alert('Input required', 'Please enter a description for the manual road hazard.');
+                    return;
+                  }
+                  const targetX = driverPos ? driverPos.x : 50;
+                  const targetY = driverPos ? driverPos.y : 50;
+
+                  try {
+                    const result = await insertHazard({
+                      type: selectedManualType,
+                      severity: manualSeverity,
+                      title: '🚧 ' + manualNote.trim(),
+                      note: 'Construction deployment: ' + manualNote.trim(),
+                      x: targetX,
+                      y: targetY,
+                    });
+
+                    // Add to active deployed hazards state
+                    setMyDeployedHazards(prev => [result, ...prev]);
+                    setManualNote('');
+                    
+                    // Trigger map reload in index.tsx
+                    const updated = await fetchActiveHazards();
+                    if (Array.isArray(updated)) {
+                      setHazards(updated.map(dbHazardToHazard));
+                    }
+
+                    Alert.alert('Deployed successfully', 'Manual hazard deployed at your exact location!');
+                  } catch (e: any) {
+                    Alert.alert('Deployment Failed', e.message);
+                  }
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>⚠️ DEPLOY HAZARD TO GPS</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Active Deployed list */}
+            <Text style={{ color: colors.text, fontWeight: '800', fontSize: 14, marginTop: 12, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>2. Your Active Deployments ({myDeployedHazards.length})</Text>
+
+            <View style={{ gap: 10 }}>
+              {myDeployedHazards.length === 0 ? (
+                <View style={{ 
+                  padding: 16, 
+                  borderRadius: 12, 
+                  borderWidth: 1.5, 
+                  borderColor: colors.border, 
+                  borderStyle: 'dashed',
+                  alignItems: 'center' 
+                }}>
+                  <MaterialCommunityIcons name="road-variant" size={24} color={colors.textMuted} />
+                  <Text style={{ color: colors.textMuted, fontSize: 11.5, marginTop: 4, textAlign: 'center' }}>No active hazards deployed in this session.</Text>
+                </View>
+              ) : (
+                myDeployedHazards.map((item) => (
+                  <View 
+                    key={item.id} 
+                    style={{ 
+                      padding: 12, 
+                      borderRadius: 14, 
+                      borderWidth: 1, 
+                      borderColor: colors.border, 
+                      backgroundColor: colors.surfaceElevated 
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={{ color: colors.text, fontWeight: '800', fontSize: 13 }}>{item.title}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 10.5, marginTop: 2 }}>
+                          Type: {item.type} · Severity: {item.severity}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: colors.danger + '15',
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 8,
+                          borderColor: colors.danger,
+                          borderWidth: 1
+                        }}
+                        onPress={async () => {
+                          Alert.alert(
+                            'Dismantle Hazard',
+                            'Are you sure you want to delete this hazard from the corridor registry?',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { 
+                                text: 'Delete Now', 
+                                style: 'destructive',
+                                onPress: async () => {
+                                  try {
+                                    await deleteHazard(item.id);
+                                    setMyDeployedHazards(prev => prev.filter(h => h.id !== item.id));
+                                    
+                                    // Trigger map reload
+                                    const updated = await fetchActiveHazards();
+                                    if (Array.isArray(updated)) {
+                                      setHazards(updated.map(dbHazardToHazard));
+                                    }
+                                    Alert.alert('Dismantled', 'Hazard successfully deleted.');
+                                  } catch (e: any) {
+                                    Alert.alert('Deletion Failed', e.message);
+                                  }
+                                }
+                              }
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={{ color: colors.danger, fontWeight: '800', fontSize: 10 }}>DELETE</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
+        </ScrollView>
+      </BottomSheet>
+
       {roadCaptureActive && (
-        <View style={StyleSheet.absoluteFill}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <RoadCapture onClose={() => setRoadCaptureActive(false)} />
         </View>
       )}

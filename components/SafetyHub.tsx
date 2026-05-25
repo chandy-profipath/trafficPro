@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Animated, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Animated, TouchableOpacity, Alert } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -7,6 +7,8 @@ import { useTheme } from '../theme';
 
 export default function SafetyHub() {
   const { colors, mode } = useTheme();
+  const [radarActive, setRadarActive] = useState(true);
+  const [sosActive, setSosActive] = useState(false);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -48,25 +50,78 @@ export default function SafetyHub() {
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Strategic Tools</Text>
         <View style={styles.toolsGrid}>
-          <TouchableOpacity style={[styles.toolCard, { backgroundColor: mode === 'dark' ? colors.surfaceElevated : '#fff', borderColor: colors.danger }]}>
-             <View style={[styles.toolIcon, { backgroundColor: colors.danger + '20' }]}>
-                <MaterialCommunityIcons name="radar" size={24} color={colors.danger} />
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            style={[styles.toolCard, { backgroundColor: mode === 'dark' ? colors.surfaceElevated : '#fff', borderColor: radarActive ? colors.danger : colors.border }]}
+            onPress={() => {
+              const nextState = !radarActive;
+              setRadarActive(nextState);
+              Alert.alert(
+                'Blackspot Radar',
+                nextState 
+                  ? 'Blackspot Radar active! Scanning route path for critical high-risk crime or accident zones.'
+                  : 'Blackspot Radar deactivated. High-risk security warnings are temporarily paused.'
+              );
+            }}
+          >
+             <View style={[styles.toolIcon, { backgroundColor: radarActive ? colors.danger + '20' : colors.border + '20' }]}>
+                <MaterialCommunityIcons name="radar" size={24} color={radarActive ? colors.danger : colors.textMuted} />
              </View>
              <Text style={[styles.toolTitle, { color: colors.text }]}>Blackspot Radar</Text>
              <Text style={[styles.toolSub, { color: colors.textMuted }]}>Security & Accident data</Text>
-             <View style={[styles.activeBadge, { backgroundColor: colors.danger }]}>
-                <Text style={styles.activeText}>ACTIVE</Text>
+             <View style={[styles.activeBadge, { backgroundColor: radarActive ? colors.danger : colors.textMuted }]}>
+                <Text style={styles.activeText}>{radarActive ? 'ACTIVE' : 'MUTED'}</Text>
              </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.toolCard, { backgroundColor: mode === 'dark' ? colors.surfaceElevated : '#fff', borderColor: colors.primary }]}>
-             <View style={[styles.toolIcon, { backgroundColor: colors.primary + '20' }]}>
-                <MaterialCommunityIcons name="toolbox" size={24} color={colors.primary} />
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            style={[styles.toolCard, { backgroundColor: mode === 'dark' ? colors.surfaceElevated : '#fff', borderColor: sosActive ? colors.success : colors.primary }]}
+            onPress={() => {
+              if (sosActive) {
+                Alert.alert(
+                  'SOS Active',
+                  'Emergency service request is already dispatched. Our nearest recovery vehicle is on the way.'
+                );
+                return;
+              }
+              Alert.alert(
+                'SOS Emergency Dispatch',
+                'Instantly request recovery vehicle & professional breakdown support to your current GPS position?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { 
+                    text: 'Dispatch Now', 
+                    style: 'destructive',
+                    onPress: () => {
+                      setSosActive(true);
+                      Alert.alert(
+                        'Dispatch Initialized',
+                        'SOS Dispatch Active! An emergency recovery team has been assigned and is heading to your coordinates. Stand by!'
+                      );
+                    }
+                  }
+                ]
+              );
+            }}
+          >
+             <View style={[styles.toolIcon, { backgroundColor: sosActive ? colors.success + '20' : colors.primary + '20' }]}>
+                <MaterialCommunityIcons name="toolbox" size={24} color={sosActive ? colors.success : colors.primary} />
              </View>
              <Text style={[styles.toolTitle, { color: colors.text }]}>SOS Mechanic</Text>
              <Text style={[styles.toolSub, { color: colors.textMuted }]}>On-demand Fundi</Text>
-             <TouchableOpacity style={[styles.requestBtn, { backgroundColor: colors.primary }]}>
-                <Text style={styles.requestText}>REQUEST</Text>
+             <TouchableOpacity 
+               style={[styles.requestBtn, { backgroundColor: sosActive ? colors.success : colors.primary }]}
+               onPress={() => {
+                 if (sosActive) {
+                   Alert.alert('SOS Active', 'Recovery dispatch requested successfully!');
+                 } else {
+                   setSosActive(true);
+                   Alert.alert('SOS Active', 'Breakdown mechanic is currently en route to your coordinates.');
+                 }
+               }}
+             >
+                <Text style={styles.requestText}>{sosActive ? 'EN ROUTE' : 'REQUEST'}</Text>
              </TouchableOpacity>
           </TouchableOpacity>
         </View>

@@ -10,9 +10,10 @@ import StarRating from './StarRating';
 interface Props {
   kind: 'fuel' | 'hotel' | 'all';
   data?: any[];
+  onSelectPOI?: (poi: any) => void;
 }
 
-export default function POIList({ kind, data }: Props) {
+export default function POIList({ kind, data, onSelectPOI }: Props) {
   const { colors } = useTheme();
   
   const source = Array.isArray(data) ? data : pois;
@@ -25,6 +26,7 @@ export default function POIList({ kind, data }: Props) {
           key={p.id}
           activeOpacity={0.7}
           style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+          onPress={() => onSelectPOI && onSelectPOI(p)}
         >
           <View style={styles.imgContainer}>
             {p.image ? (

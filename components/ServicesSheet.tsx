@@ -11,9 +11,10 @@ type Tab = 'all' | 'fuel' | 'hotel';
 interface Props {
   onOpenShop: () => void;
   pois?: any[];
+  onSelectPOI?: (poi: any) => void;
 }
 
-export default function ServicesSheet({ onOpenShop, pois }: Props) {
+export default function ServicesSheet({ onOpenShop, pois, onSelectPOI }: Props) {
   const { colors, mode } = useTheme();
   const _tabState = useState<Tab>('all');
   const tab = _tabState[0];
@@ -78,7 +79,7 @@ export default function ServicesSheet({ onOpenShop, pois }: Props) {
         />
       </View>
 
-      <POIList kind={tab} data={pois} />
+      <POIList kind={tab} data={pois} onSelectPOI={onSelectPOI} />
     </View>
   );
 }

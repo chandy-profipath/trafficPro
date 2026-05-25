@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ImageBackground, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ImageBackground, Alert, ActivityIndicator, ScrollView, Dimensions, Linking } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -7,6 +7,37 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { pctToLatLng } from '../lib/coords';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
+
+const { width } = Dimensions.get('window');
+
+const CAR_PART_CATEGORIES = [
+  'Engine',
+  'Brakes',
+  'Suspension',
+  'Transmission',
+  'Electrical',
+  'Exhaust',
+  'Body & Trim',
+  'Interior',
+  'Tires & Wheels',
+  'Fluids & Filters',
+  'Tools & Equipment'
+];
+
+const RICH_CATEGORIES = [
+  { name: 'All', icon: 'map-marker-multiple', color: '#6366F1' },
+  { name: 'Engine', icon: 'engine', color: '#F59E0B' },
+  { name: 'Brakes', icon: 'car-brake-abs', color: '#EF4444' },
+  { name: 'Suspension', icon: 'car-settings', color: '#8B5CF6' },
+  { name: 'Transmission', icon: 'cog-outline', color: '#EC4899' },
+  { name: 'Electrical', icon: 'battery-charging', color: '#10B981' },
+  { name: 'Exhaust', icon: 'pipe-leak', color: '#64748B' },
+  { name: 'Body & Trim', icon: 'car-door', color: '#06B6D4' },
+  { name: 'Interior', icon: 'car-seat', color: '#14B8A6' },
+  { name: 'Tires & Wheels', icon: 'tire', color: '#3B82F6' },
+  { name: 'Fluids & Filters', icon: 'oil-can', color: '#84CC16' },
+  { name: 'Tools & Equipment', icon: 'toolbox-outline', color: '#0EA5E9' },
+];
 
 async function promptImagePicker(): Promise<string | null> {
   return new Promise((resolve) => {
@@ -109,7 +140,7 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
   const [shopPhone, setShopPhone] = useState('');
   const [shopImage, setShopImage] = useState('');
   const [pickedImageUri, setPickedImageUri] = useState<string | null>(null);
-  const [linkLocation, setLinkLocation] = useState(true); // Toggle for choosing not to set location initially
+  const [linkLocation, setLinkLocation] = useState(true);
 
   // Dashboard Sub-views: 'products' | 'orders' | 'add_product'
   const [dashboardTab, setDashboardTab] = useState<'products' | 'orders' | 'add_product'>('products');
@@ -118,7 +149,6 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
     loadShops();
   }, [user]);
 
-  // Haversine function to compute distance in kilometers
   function getDistance(sx: number | null, sy: number | null) {
     if (sx === null || sy === null) return null;
     const p1 = pctToLatLng(userX, userY);
@@ -133,7 +163,7 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
       Math.cos(toRad(p1.latitude)) * Math.cos(toRad(p2.latitude)) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return (R * c).toFixed(1); // 1 decimal place
+    return (R * c).toFixed(1);
   }
 
   async function loadShops() {
@@ -166,7 +196,6 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
 
     setCreating(true);
     try {
-      // 1. Upload picked image if available
       let finalImageUrl = null;
       if (pickedImageUri) {
         finalImageUrl = await uploadImage(pickedImageUri, 'shops');
@@ -174,11 +203,10 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
         finalImageUrl = shopImage.trim();
       }
 
-      // 2. Set coordinates only if location linking is enabled
       const finalX = linkLocation ? userX : null;
       const finalY = linkLocation ? userY : null;
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('shops')
         .insert([{
           name: shopName.trim(),
@@ -190,9 +218,7 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
           y: finalY,
           rating: 4.8,
           reviews: 0
-        }])
-        .select()
-        .single();
+        }]);
 
       if (error) throw error;
 
@@ -248,53 +274,192 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
     const isUnmapped = selectedShop.x === null || selectedShop.y === null;
 
     return (
-      <View style={[styles.dashboardRoot, { backgroundColor: '#0B0F19' }]}>
-        {/* Header (Greeting & Subtext) */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 30, paddingBottom: 24 }}>
-          <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#FFF' }}>Hello Manager!</Text>
-          <Text style={{ fontSize: 15, color: '#9CA3AF', marginTop: 4 }}>{selectedShop.name} dashboard is ready.</Text>
+      <View style={[styles.dashboardRoot, { backgroundColor: colors.bg }]}>
+        {/* Premium Banner Background Header */}
+        <View style={[styles.premiumHeaderContainerImage, { borderColor: colors.border }]}>
+          <ImageBackground 
+            source={{ uri: selectedShop.image || 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?q=80&w=800&auto=format&fit=crop' }} 
+            style={StyleSheet.absoluteFillObject}
+            resizeMode="cover"
+          >
+            {/* Smooth dark overlay to ensure maximum text readability and elegance */}
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(2, 6, 23, 0.58)' }]} />
+            
+            {/* Header Content placed perfectly at the bottom */}
+            <View style={styles.headerImageContent}>
+              <View style={styles.badgeRow}>
+                <View style={[styles.premiumBadge, { backgroundColor: colors.primary + '45', borderColor: colors.primary }]}>
+                  <Text style={[styles.premiumBadgeText, { color: '#FFF' }]}>{selectedShop.type}</Text>
+                </View>
+                <TouchableOpacity 
+                  activeOpacity={0.8}
+                  style={[styles.premiumBadge, { 
+                    backgroundColor: isUnmapped ? 'rgba(244, 63, 94, 0.4)' : 'rgba(16, 185, 129, 0.4)', 
+                    borderColor: isUnmapped ? colors.danger : colors.success 
+                  }]}
+                  onPress={async () => {
+                    if (isUnmapped) {
+                      Alert.alert(
+                        'Activate Shop GPS',
+                        'Would you like to link this outlet to your current GPS position and activate online customer ordering?',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Link GPS Now', onPress: linkShopLocationToCurrent }
+                        ]
+                      );
+                    } else {
+                      Alert.alert(
+                        'Deactivate Shop GPS',
+                        'Would you like to unlink this shop\'s GPS coordinates and temporarily pause online ordering?',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { 
+                            text: 'Go Offline', 
+                            style: 'destructive',
+                            onPress: async () => {
+                              try {
+                                const { error } = await supabase
+                                  .from('shops')
+                                  .update({ x: null, y: null })
+                                  .eq('id', selectedShop.id);
+                                if (error) throw error;
+                                Alert.alert('Offline', 'Shop GPS unlinked successfully.');
+                                setSelectedShop({ ...selectedShop, x: null, y: null });
+                                loadShops();
+                              } catch (e: any) {
+                                Alert.alert('Error', e.message);
+                              }
+                            }
+                          }
+                        ]
+                      );
+                    }
+                  }}
+                >
+                  <View style={[styles.statusDot, { backgroundColor: isUnmapped ? colors.danger : colors.success }]} />
+                  <Text style={[styles.premiumBadgeText, { color: '#FFF' }]}>
+                    {isUnmapped ? 'Offline' : 'Online'}
+                  </Text>
+                </TouchableOpacity>
+                <View style={[styles.premiumBadge, { backgroundColor: 'rgba(251, 191, 36, 0.35)', borderColor: '#FBBF24' }]}>
+                  <Ionicons name="star" size={10} color="#FBBF24" style={{ marginRight: 3 }} />
+                  <Text style={[styles.premiumBadgeText, { color: '#FBBF24' }]}>{selectedShop.rating || '4.8'}</Text>
+                </View>
+              </View>
+
+              <Text style={[styles.premiumShopName, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }]} numberOfLines={1}>
+                {selectedShop.name}
+              </Text>
+              
+              <View style={[styles.row, { marginTop: 4, flexWrap: 'wrap', gap: 12 }]}>
+                {selectedShop.phone && (
+                  <TouchableOpacity 
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      Linking.openURL(`tel:${selectedShop.phone}`).catch(() => {
+                        Alert.alert('Call Failed', 'Dialer is not supported on this device.');
+                      });
+                    }}
+                  >
+                    <Text style={[styles.premiumSubText, { color: '#E5E7EB', textDecorationLine: 'underline' }]}>📞 {selectedShop.phone}</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity 
+                  activeOpacity={0.7} 
+                  onPress={() => {
+                    if (isUnmapped) {
+                      Alert.alert(
+                        'Map GPS Coordinates',
+                        'Instantly link this shop to your current GPS coordinates to allow customer directions?',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Link GPS', onPress: linkShopLocationToCurrent }
+                        ]
+                      );
+                    } else {
+                      Alert.alert('GPS Status', `Coordinates linked at X: ${selectedShop.x}, Y: ${selectedShop.y}. Tapping Online status badge above allows unlinking.`);
+                    }
+                  }}
+                >
+                  <Text style={[styles.premiumSubText, { color: colors.accent, fontWeight: '800' }]}>
+                    📍 {isUnmapped ? 'GPS Off (Tap to Link)' : 'GPS Active'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ImageBackground>
         </View>
 
-        {/* Quick Access Grid */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 28 }}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#FFF', marginBottom: 14 }}>Quick Access</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-            <TouchableOpacity style={styles.quickAccessBtn} onPress={() => setDashboardTab('orders')}>
-              <MaterialCommunityIcons name="cart-outline" size={26} color="#00E5FF" />
-              <Text style={styles.quickAccessText}>Orders</Text>
+        {/* Dashboard Grid Access Bar */}
+        <View style={styles.quickAccessWrapper}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickAccessScroll}>
+            <TouchableOpacity 
+              style={[
+                styles.quickAccessBtn, 
+                { backgroundColor: colors.surfaceElevated, borderColor: dashboardTab === 'products' ? colors.primary : colors.border }
+              ]} 
+              onPress={() => setDashboardTab('products')}
+            >
+              <View style={[styles.quickAccessIconBg, { backgroundColor: colors.primary + '15' }]}>
+                <MaterialCommunityIcons name="package-variant" size={15} color={colors.primary} />
+              </View>
+              <Text style={[styles.quickAccessText, { color: colors.text }]}>Catalogue</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAccessBtn} onPress={() => setDashboardTab('products')}>
-              <MaterialCommunityIcons name="package-variant" size={26} color="#00E5FF" />
-              <Text style={styles.quickAccessText}>Inventory</Text>
+
+            <TouchableOpacity 
+              style={[
+                styles.quickAccessBtn, 
+                { backgroundColor: colors.surfaceElevated, borderColor: dashboardTab === 'orders' ? colors.primary : colors.border }
+              ]} 
+              onPress={() => setDashboardTab('orders')}
+            >
+              <View style={[styles.quickAccessIconBg, { backgroundColor: colors.accent + '15' }]}>
+                <MaterialCommunityIcons name="cart-outline" size={15} color={colors.accent} />
+              </View>
+              <Text style={[styles.quickAccessText, { color: colors.text }]}>Orders</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAccessBtn} onPress={() => setDashboardTab('add_product')}>
-              <Ionicons name="add" size={26} color="#00E5FF" />
-              <Text style={styles.quickAccessText}>Add Part</Text>
+
+            <TouchableOpacity 
+              style={[
+                styles.quickAccessBtn, 
+                { backgroundColor: colors.surfaceElevated, borderColor: dashboardTab === 'add_product' ? colors.primary : colors.border }
+              ]} 
+              onPress={() => setDashboardTab('add_product')}
+            >
+              <View style={[styles.quickAccessIconBg, { backgroundColor: colors.success + '15' }]}>
+                <Ionicons name="add-circle-outline" size={15} color={colors.success} />
+              </View>
+              <Text style={[styles.quickAccessText, { color: colors.text }]}>Add Product</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAccessBtn} onPress={() => setView('shops')}>
-              <Ionicons name="exit-outline" size={26} color="#00E5FF" />
-              <Text style={styles.quickAccessText}>Exit</Text>
+
+            <TouchableOpacity style={[styles.quickAccessBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]} onPress={() => setView('shops')}>
+              <View style={[styles.quickAccessIconBg, { backgroundColor: colors.danger + '15' }]}>
+                <Ionicons name="exit-outline" size={15} color={colors.danger} />
+              </View>
+              <Text style={[styles.quickAccessText, { color: colors.text }]}>Exit Shop</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
 
-        {/* Dashboard Content */}
-        <View style={{ flex: 1, paddingHorizontal: 20 }}>
+        {/* Dashboard Dynamic Tab Section */}
+        <View style={{ flex: 1 }}>
           {dashboardTab === 'products' && <ShopProductsCatalogue shop={selectedShop} />}
           
           {dashboardTab === 'orders' && (
             isUnmapped ? (
-              <View style={[styles.warningCard, { backgroundColor: 'rgba(220, 38, 38, 0.1)', borderColor: '#DC2626' }]}>
-                <MaterialCommunityIcons name="map-marker-off" size={36} color="#DC2626" />
-                <Text style={[styles.warningTitle, { color: '#FFF' }]}>Orders Deactivated</Text>
-                <Text style={[styles.warningText, { color: '#9CA3AF' }]}>
+              <View style={[styles.warningCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.danger }]}>
+                <View style={[styles.warningIconBg, { backgroundColor: colors.danger + '15' }]}>
+                  <MaterialCommunityIcons name="map-marker-off" size={32} color={colors.danger} />
+                </View>
+                <Text style={[styles.warningTitle, { color: colors.text }]}>Orders Deactivated</Text>
+                <Text style={[styles.warningText, { color: colors.textMuted }]}>
                   This shop does not have a mapped location. You cannot receive active customer orders until the location is linked.
                 </Text>
                 <TouchableOpacity 
-                  style={[styles.submitBtn, { backgroundColor: '#00E5FF', marginTop: 16 }]} 
+                  style={[styles.submitBtn, { backgroundColor: colors.primary, marginTop: 20, width: '100%' }]} 
                   onPress={linkShopLocationToCurrent}
                 >
-                  <Text style={[styles.submitBtnText, { color: '#000' }]}>📍 Link Location to GPS</Text>
+                  <Text style={styles.submitBtnText}>📍 Link Location to GPS</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -309,13 +474,24 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
   }
 
   return (
-    <View style={styles.shopManagerContainer}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }} style={[styles.shopManagerContainer, { backgroundColor: colors.bg }]}>
+      {/* Hero Shops Overview Banner */}
+      <View style={[styles.heroCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderLeftColor: colors.primary }]}>
+        <View style={styles.heroLeft}>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>Your Garage Hub</Text>
+          <Text style={[styles.heroSub, { color: colors.textMuted }]}>Manage local inventory, receive customer booking and active parts requests.</Text>
+        </View>
+        <View style={[styles.heroIconBg, { backgroundColor: colors.primary + '15' }]}>
+          <MaterialCommunityIcons name="storefront-outline" size={32} color={colors.primary} />
+        </View>
+      </View>
+
       {/* Shops List */}
-      <Text style={[styles.listTitle, { color: colors.text }]}>Your Registered Shops ({shops.length})</Text>
+      <Text style={[styles.listTitle, { color: colors.text }]}>Registered Outlets ({shops.length})</Text>
       {shops.length === 0 ? (
         <View style={[styles.emptyCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <MaterialCommunityIcons name="store-alert" size={40} color={colors.textMuted} />
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No shops created yet. Register one below to start selling.</Text>
+          <MaterialCommunityIcons name="store-alert-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No outlets active. Fill out the registration terminal below to initialize your storefront.</Text>
         </View>
       ) : (
         <View style={styles.listContainer}>
@@ -332,8 +508,8 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
                 {item.image ? (
                   <Image source={{ uri: item.image }} style={styles.shopImage} />
                 ) : (
-                  <View style={[styles.shopImage, { backgroundColor: isDark ? '#1E293B' : '#E2E8F0', alignItems: 'center', justifyContent: 'center' }]}>
-                    <MaterialCommunityIcons name="store" size={32} color={colors.primary} />
+                  <View style={[styles.shopImage, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
+                    <MaterialCommunityIcons name="store" size={28} color={colors.primary} />
                   </View>
                 )}
 
@@ -341,7 +517,9 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
                   <View style={styles.shopHeaderRow}>
                     <Text style={[styles.shopName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
                     {isShopUnmapped ? (
-                      <Text style={[styles.shopDistance, { color: colors.danger, fontSize: 11 }]}>⚠️ Unmapped</Text>
+                      <View style={[styles.miniStatusBadge, { backgroundColor: colors.danger + '15' }]}>
+                        <Text style={[styles.miniStatusText, { color: colors.danger }]}>⚠️ Offline</Text>
+                      </View>
                     ) : (
                       distance && (
                         <Text style={[styles.shopDistance, { color: colors.accent }]}>📍 {distance} km</Text>
@@ -349,84 +527,116 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
                     )}
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                    <View style={[styles.typeBadge, { backgroundColor: colors.primary + '18' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                    <View style={[styles.typeBadge, { backgroundColor: colors.primary + '12' }]}>
                       <Text style={[styles.typeBadgeText, { color: colors.primary }]}>{item.type}</Text>
                     </View>
-                    <Text style={[styles.ratingText, { color: colors.text }]}>⭐ {item.rating || '4.8'}</Text>
+                    <View style={styles.row}>
+                      <Ionicons name="star" size={13} color="#FBBF24" style={{ marginRight: 3 }} />
+                      <Text style={[styles.ratingText, { color: colors.text }]}>{item.rating || '4.8'}</Text>
+                    </View>
                   </View>
 
                   {item.phone && (
                     <Text style={[styles.shopPhone, { color: colors.textMuted }]} numberOfLines={1}>📞 {item.phone}</Text>
                   )}
                 </View>
+                
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={{ marginLeft: 8 }} />
               </TouchableOpacity>
             );
           })}
         </View>
       )}
 
-      <View style={{ height: 20 }} />
+      <View style={{ height: 28 }} />
 
       {/* Create Shop Panel */}
       <View style={[styles.formCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <Text style={[styles.formTitle, { color: colors.text }]}><MaterialCommunityIcons name="store-plus" size={18} color={colors.primary} /> Create New Shop</Text>
+        <View style={styles.formCardHeader}>
+          <View style={[styles.formHeaderIconBg, { backgroundColor: colors.primary + '15' }]}>
+            <MaterialCommunityIcons name="store-plus-outline" size={20} color={colors.primary} />
+          </View>
+          <View style={{ marginLeft: 12 }}>
+            <Text style={[styles.formTitle, { color: colors.text }]}>Register Outlet</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>Setup and configure a new auto workshop or parts center.</Text>
+          </View>
+        </View>
         
         <View style={styles.formGrid}>
-          <TextInput 
-            placeholder="Shop Name" 
-            placeholderTextColor={colors.textMuted} 
-            value={shopName} 
-            onChangeText={setShopName} 
-            style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-          />
-          <View style={styles.row}>
-            <TouchableOpacity 
-              style={[styles.toggleBtn, shopType === 'Supplier' && { backgroundColor: colors.primary }]} 
-              onPress={() => setShopType('Supplier')}
-            >
-              <Text style={[styles.toggleBtnText, { color: shopType === 'Supplier' ? '#fff' : colors.textMuted }]}>Supplier</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.toggleBtn, shopType === 'Mechanic' && { backgroundColor: colors.primary }]} 
-              onPress={() => setShopType('Mechanic')}
-            >
-              <Text style={[styles.toggleBtnText, { color: shopType === 'Mechanic' ? '#fff' : colors.textMuted }]}>Mechanic</Text>
-            </TouchableOpacity>
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Shop Name</Text>
+            <TextInput 
+              placeholder="e.g. Apex Auto Parts Center" 
+              placeholderTextColor={colors.textMuted} 
+              value={shopName} 
+              onChangeText={setShopName} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Outlet Category</Text>
+            <View style={styles.row}>
+              <TouchableOpacity 
+                style={[
+                  styles.toggleBtn, 
+                  { backgroundColor: colors.bg, borderColor: colors.border },
+                  shopType === 'Supplier' && { backgroundColor: colors.primary, borderColor: colors.primary }
+                ]} 
+                onPress={() => setShopType('Supplier')}
+              >
+                <Text style={[styles.toggleBtnText, { color: shopType === 'Supplier' ? '#fff' : colors.textMuted }]}>Spare Parts Supplier</Text>
+              </TouchableOpacity>
+              <View style={{ width: 10 }} />
+              <TouchableOpacity 
+                style={[
+                  styles.toggleBtn, 
+                  { backgroundColor: colors.bg, borderColor: colors.border },
+                  shopType === 'Mechanic' && { backgroundColor: colors.primary, borderColor: colors.primary }
+                ]} 
+                onPress={() => setShopType('Mechanic')}
+              >
+                <Text style={[styles.toggleBtnText, { color: shopType === 'Mechanic' ? '#fff' : colors.textMuted }]}>Professional Mechanic</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Device Image Picker Badge */}
-          <View style={[styles.imagePickerBadge, { borderColor: colors.border }]}>
+          <View style={[styles.imagePickerBadge, { borderColor: colors.border, backgroundColor: colors.bg }]}>
             {pickedImageUri ? (
               <View style={styles.row}>
                 <Image source={{ uri: pickedImageUri }} style={styles.pickerPreview} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }} numberOfLines={1}>Selected Photo</Text>
+                  <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }} numberOfLines={1}>Selected Cover Photo</Text>
                   <TouchableOpacity style={styles.pickerSubBtn} onPress={pickImage}>
-                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Change Photo</Text>
+                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Change cover image</Text>
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => setPickedImageUri(null)} style={{ padding: 6 }}>
-                  <Ionicons name="trash" size={18} color={colors.danger} />
+                <TouchableOpacity onPress={() => setPickedImageUri(null)} style={[styles.trashBtn, { backgroundColor: colors.danger + '15' }]}>
+                  <Ionicons name="trash" size={16} color={colors.danger} />
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity style={styles.pickerTrigger} onPress={pickImage}>
-                <MaterialCommunityIcons name="image-plus" size={24} color={colors.primary} />
-                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13, marginTop: 4 }}>Select Shop Picture</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>Click to open your device photo gallery</Text>
+                <MaterialCommunityIcons name="cloud-upload-outline" size={24} color={colors.primary} />
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13, marginTop: 4 }}>Select Storefront Picture</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>Tap to open your device photo gallery</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          <TextInput 
-            placeholder="Phone Number" 
-            placeholderTextColor={colors.textMuted} 
-            value={shopPhone} 
-            onChangeText={setShopPhone} 
-            style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-            keyboardType="phone-pad"
-          />
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Hotline / Phone Number</Text>
+            <TextInput 
+              placeholder="e.g. +1 (555) 019-2834" 
+              placeholderTextColor={colors.textMuted} 
+              value={shopPhone} 
+              onChangeText={setShopPhone} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+              keyboardType="phone-pad"
+            />
+          </View>
 
           {/* Location link trigger */}
           <TouchableOpacity 
@@ -434,40 +644,42 @@ export default function ShopManager({ user, userX, userY }: ShopManagerProps) {
               styles.locationToggle, 
               { 
                 borderColor: linkLocation ? colors.primary : colors.border,
-                backgroundColor: linkLocation ? colors.primary + '0A' : 'transparent'
+                backgroundColor: linkLocation ? colors.primary + '0A' : colors.bg
               }
             ]}
             onPress={() => setLinkLocation(!linkLocation)}
             activeOpacity={0.8}
           >
-            <MaterialCommunityIcons 
-              name={linkLocation ? "map-marker" : "map-marker-off"} 
-              size={22} 
-              color={linkLocation ? colors.primary : colors.textMuted} 
-            />
-            <View style={{ flex: 1, marginLeft: 10 }}>
+            <View style={[styles.locationToggleIconBg, { backgroundColor: linkLocation ? colors.primary + '15' : colors.border + '15' }]}>
+              <MaterialCommunityIcons 
+                name={linkLocation ? "map-marker" : "map-marker-off"} 
+                size={20} 
+                color={linkLocation ? colors.primary : colors.textMuted} 
+              />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>
-                {linkLocation ? 'GPS Location Linked' : 'No Location Set'}
+                {linkLocation ? 'Auto-Link Current GPS' : 'Offline Mode (Manual GPS)'}
               </Text>
               <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 1 }}>
                 {linkLocation 
-                  ? 'Shop will render on maps & receive orders immediately.' 
-                  : '⚠️ No orders can be received until location is mapped later.'}
+                  ? 'Instantly publishes store relative to your current coordinates.' 
+                  : 'Requires setting coordinates later in the terminal to view on maps.'}
               </Text>
             </View>
             <Ionicons 
-              name={linkLocation ? "checkbox" : "square-outline"} 
-              size={20} 
+              name={linkLocation ? "checkmark-circle" : "ellipse-outline"} 
+              size={22} 
               color={linkLocation ? colors.primary : colors.textMuted} 
             />
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.primary }]} onPress={createShop} disabled={creating}>
-            <Text style={styles.submitBtnText}>{creating ? 'Creating...' : 'Register Shop'}</Text>
+            <Text style={styles.submitBtnText}>{creating ? 'Publishing Outlet...' : 'Initialize Outlet'}</Text>
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -494,12 +706,17 @@ function ShopProductsCatalogue({ shop }: { shop: any }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const categories = ['All', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
+  const categories = [
+    'All',
+    ...CAR_PART_CATEGORIES,
+    ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))
+      .filter((cat) => !CAR_PART_CATEGORIES.some((c) => c.toLowerCase() === cat.toLowerCase()))
+  ];
   
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (p.compatibility && p.compatibility.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesCat = selectedCategory === 'All' || p.category === selectedCategory;
+    const matchesCat = selectedCategory === 'All' || (p.category && p.category.toLowerCase() === selectedCategory.toLowerCase());
     return matchesSearch && matchesCat;
   });
 
@@ -602,41 +819,79 @@ function ShopProductsCatalogue({ shop }: { shop: any }) {
         <View style={[styles.formCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
           <Text style={[styles.formTitle, { color: colors.text }]}>Edit Product Details</Text>
 
-          <TextInput 
-            placeholder="Product Name" 
-            placeholderTextColor={colors.textMuted} 
-            value={editName} 
-            onChangeText={setEditName} 
-            style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-          />
-          <TextInput 
-            placeholder="Category" 
-            placeholderTextColor={colors.textMuted} 
-            value={editCategory} 
-            onChangeText={setEditCategory} 
-            style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-          />
-          <TextInput 
-            placeholder="Price (e.g. $85.00)" 
-            placeholderTextColor={colors.textMuted} 
-            value={editPrice} 
-            onChangeText={setEditPrice} 
-            style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-          />
-          <TextInput 
-            placeholder="Compatibility (e.g. Universal)" 
-            placeholderTextColor={colors.textMuted} 
-            value={editCompat} 
-            onChangeText={setEditCompat} 
-            style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-          />
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Product Name</Text>
+            <TextInput 
+              placeholder="Product Name" 
+              placeholderTextColor={colors.textMuted} 
+              value={editName} 
+              onChangeText={setEditName} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
 
-          <Text style={{ color: colors.text, fontWeight: '800', marginTop: 16, marginBottom: 8 }}>Product Photos (Max 3)</Text>
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Category</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={{ gap: 6, paddingVertical: 4, alignItems: 'center' }}
+            >
+              {CAR_PART_CATEGORIES.map((cat) => {
+                const isSelected = editCategory.toLowerCase() === cat.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => setEditCategory(cat)}
+                    style={[
+                      styles.categoryPill,
+                      { backgroundColor: colors.bg, borderColor: colors.border },
+                      isSelected && { backgroundColor: colors.primary, borderColor: colors.primary }
+                    ]}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: isSelected ? '#FFF' : colors.textMuted }}>{cat}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TextInput 
+              placeholder="Or enter a custom category..." 
+              placeholderTextColor={colors.textMuted} 
+              value={editCategory} 
+              onChangeText={setEditCategory} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Price</Text>
+            <TextInput 
+              placeholder="Price (e.g. $85.00)" 
+              placeholderTextColor={colors.textMuted} 
+              value={editPrice} 
+              onChangeText={setEditPrice} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Compatibility Details</Text>
+            <TextInput 
+              placeholder="Compatibility (e.g. Toyota Camry 2018-2022)" 
+              placeholderTextColor={colors.textMuted} 
+              value={editCompat} 
+              onChangeText={setEditCompat} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
+
+          <Text style={{ color: colors.text, fontWeight: '800', marginTop: 16, marginBottom: 8, fontSize: 13 }}>Product Photos (Max 3)</Text>
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
             {[editImg1, editImg2, editImg3].map((img, idx) => {
               if (!img) {
                 return (
-                  <TouchableOpacity key={idx} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }} onPress={async () => {
+                  <TouchableOpacity key={idx} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }} onPress={async () => {
                     const uri = await promptImagePicker();
                     if (uri) {
                       const uploaded = await uploadImage(uri, 'spare-images');
@@ -650,7 +905,7 @@ function ShopProductsCatalogue({ shop }: { shop: any }) {
                 );
               }
               return (
-                <View key={idx} style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden' }}>
+                <View key={idx} style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
                   <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} />
                   <TouchableOpacity style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 2 }} onPress={() => {
                     if (idx === 0) setEditImg1('');
@@ -669,8 +924,8 @@ function ShopProductsCatalogue({ shop }: { shop: any }) {
               <Text style={styles.submitBtnText}>{updating ? 'Updating...' : 'Save Changes'}</Text>
             </TouchableOpacity>
             <View style={{ width: 10 }} />
-            <TouchableOpacity style={[styles.submitBtn, { backgroundColor: '#9CA3AF', flex: 1 }]} onPress={() => setEditingProduct(null)}>
-              <Text style={styles.submitBtnText}>Cancel</Text>
+            <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.border, flex: 1 }]} onPress={() => setEditingProduct(null)}>
+              <Text style={[styles.submitBtnText, { color: colors.text }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -680,29 +935,77 @@ function ShopProductsCatalogue({ shop }: { shop: any }) {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Featured Products Header */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <View>
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFF' }}>Featured Products</Text>
-          <Text style={{ fontSize: 13, color: '#9CA3AF', marginTop: 2 }}>A vibrant product list</Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#1F2937', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="chevron-back" size={18} color="#9CA3AF" />
-          </View>
-          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#1F2937', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-          </View>
-        </View>
+      {/* Search & Category Filter Section */}
+      <View style={[styles.searchWrapper, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+        <Ionicons name="search" size={18} color={colors.textMuted} />
+        <TextInput 
+          placeholder="Search spare parts or compatibility..." 
+          placeholderTextColor={colors.textMuted} 
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={{ flex: 1, color: colors.text, fontSize: 14, fontWeight: '500', height: '100%', paddingVertical: 0 }}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
+      {/* Horizontal categories list */}
+      {categories.length > 1 && (
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={{ flexGrow: 0, marginBottom: 8 }} 
+          contentContainerStyle={styles.categoryScroll}
+        >
+          {categories.map((cat) => {
+            const isSelected = selectedCategory === cat;
+            const richCat = RICH_CATEGORIES.find(c => c.name.toLowerCase() === cat.toLowerCase()) || {
+              name: cat,
+              icon: 'cog-outline',
+              color: '#64748B'
+            };
+            return (
+              <TouchableOpacity 
+                key={cat} 
+                onPress={() => setSelectedCategory(cat)}
+                style={[
+                  styles.catBtn, 
+                  { 
+                    backgroundColor: mode === 'dark' ? colors.surfaceElevated : '#fff', 
+                    borderColor: isSelected ? richCat.color : colors.border 
+                  }
+                ]}
+              >
+                <MaterialCommunityIcons 
+                  name={richCat.icon as any} 
+                  size={20} 
+                  color={isSelected ? richCat.color : colors.textMuted} 
+                />
+                <Text style={[styles.catLabel, { color: isSelected ? colors.text : colors.textMuted }]}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
       {products.length === 0 ? (
-        <View style={[styles.emptyCard, { backgroundColor: '#1F2937', borderColor: '#374151' }]}>
-          <Text style={[styles.emptyText, { color: '#9CA3AF' }]}>No products found.</Text>
+        <View style={[styles.emptyCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, marginTop: 10 }]}>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No products found in this outlet.</Text>
+        </View>
+      ) : filteredProducts.length === 0 ? (
+        <View style={[styles.emptyCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, marginTop: 10 }]}>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No results matching your query.</Text>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-          {filteredProducts.map(renderProductCard)}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.gridContainer}>
+          <View style={styles.gridWrap}>
+            {filteredProducts.map(renderProductCard)}
+          </View>
         </ScrollView>
       )}
     </View>
@@ -711,54 +1014,43 @@ function ShopProductsCatalogue({ shop }: { shop: any }) {
   function renderProductCard(item: any) {
     const productImages = item.images || (item.image ? [item.image] : []);
     return (
-      <View key={item.id} style={{
-        backgroundColor: '#111827',
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 229, 255, 0.25)', // Neon glow effect border
-        shadowColor: '#00E5FF',
-        shadowOpacity: 0.15,
-        shadowRadius: 15,
-        shadowOffset: { width: 0, height: 0 },
-        elevation: 5,
-        marginBottom: 20,
-        flexDirection: 'row',
-        padding: 12,
-        paddingRight: 16
-      }}>
-        {/* Left: Image Box */}
-        <View style={{ width: 110, height: 110, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, overflow: 'hidden', padding: 8 }}>
+      <View key={item.id} style={[styles.premiumProductCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+        {/* Product Image */}
+        <View style={[styles.productImageContainer, { backgroundColor: colors.bg }]}>
           {productImages.length > 0 ? (
-            <Image source={{ uri: productImages[0] }} style={{ width: '100%', height: '100%', resizeMode: 'cover', borderRadius: 8 }} />
+            <Image source={{ uri: productImages[0] }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialCommunityIcons name="image-outline" size={32} color="#4B5563" />
+              <MaterialCommunityIcons name="image-off-outline" size={24} color={colors.textMuted} />
             </View>
           )}
-          <View style={{ position: 'absolute', top: 10, left: 10 }}>
-            <Ionicons name="bookmark-outline" size={18} color="#00E5FF" />
+          <View style={styles.bookmarkOverlay}>
+            <View style={[styles.premiumBadge, { backgroundColor: colors.primary + '30', borderColor: colors.primary }]}>
+              <Text style={[styles.premiumBadgeText, { color: colors.primary, fontSize: 8 }]}>{item.category || 'General'}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Right: Details */}
-        <View style={{ flex: 1, marginLeft: 16, justifyContent: 'center' }}>
+        {/* Product Details */}
+        <View style={styles.productDetailsContainer}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold', flex: 1, marginRight: 8 }} numberOfLines={2}>{item.name}</Text>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ color: '#FFF', fontSize: 14, fontWeight: 'bold' }}>⭐ {item.rating || '4.8'}</Text>
-              <Text style={{ color: '#9CA3AF', fontSize: 11 }}>(112)</Text>
+            <Text style={[styles.premiumProductName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4 }}>
+              <Ionicons name="star" size={11} color="#FBBF24" style={{ marginRight: 2 }} />
+              <Text style={{ color: colors.text, fontSize: 10, fontWeight: '700' }}>{item.rating || '4.8'}</Text>
             </View>
           </View>
 
-          <Text style={{ color: '#00E5FF', fontSize: 18, fontWeight: 'bold', marginTop: 4 }}>{item.price || 'N/A'}</Text>
-          <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 4 }} numberOfLines={1}>{item.compatibility || 'Universal Fit | Standard'}</Text>
+          <Text style={[styles.premiumProductPrice, { color: colors.accent }]}>{item.price || 'Ask for Price'}</Text>
+          <Text style={[styles.premiumProductCompat, { color: colors.textMuted }]} numberOfLines={1}>⚙️ {item.compatibility || 'Universal Fit'}</Text>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
-            <TouchableOpacity style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }} onPress={() => deleteProduct(item.id)}>
-              <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>Delete</Text>
+          <View style={styles.productActionsRow}>
+            <TouchableOpacity style={[styles.actionIconButton, { backgroundColor: colors.danger + '15' }]} onPress={() => deleteProduct(item.id)}>
+              <Ionicons name="trash-outline" size={15} color={colors.danger} />
             </TouchableOpacity>
-            <TouchableOpacity style={{ backgroundColor: '#00E5FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }} onPress={() => startEdit(item)}>
-              <Text style={{ color: '#000', fontSize: 12, fontWeight: 'bold' }}>Edit Order</Text>
+            
+            <TouchableOpacity style={[styles.actionIconButton, { backgroundColor: colors.primary }]} onPress={() => startEdit(item)}>
+              <Ionicons name="create-outline" size={15} color="#FFF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -773,7 +1065,7 @@ function ShopProductsCatalogue({ shop }: { shop: any }) {
 function ShopAddProduct({ shop, onDone }: { shop: any; onDone: () => void }) {
   const { colors } = useTheme();
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('General');
+  const [category, setCategory] = useState('Engine');
   const [price, setPrice] = useState('');
   const [compatibility, setCompatibility] = useState('');
   const [img1, setImg1] = useState('');
@@ -804,7 +1096,7 @@ function ShopAddProduct({ shop, onDone }: { shop: any; onDone: () => void }) {
 
       Alert.alert('Success', 'Product catalogued!');
       setName('');
-      setCategory('General');
+      setCategory('Engine');
       setPrice('');
       setCompatibility('');
       setImg1('');
@@ -820,75 +1112,123 @@ function ShopAddProduct({ shop, onDone }: { shop: any; onDone: () => void }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <View style={[styles.formCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <Text style={[styles.formTitle, { color: colors.text }]}><Ionicons name="sparkles" size={18} color={colors.primary} /> Add Item to Catalogue</Text>
-
-        <TextInput 
-          placeholder="Product Name" 
-          placeholderTextColor={colors.textMuted} 
-          value={name} 
-          onChangeText={setName} 
-          style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-        />
-        <TextInput 
-          placeholder="Category (e.g. Engines, Brakes)" 
-          placeholderTextColor={colors.textMuted} 
-          value={category} 
-          onChangeText={setCategory} 
-          style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-        />
-        <TextInput 
-          placeholder="Price (e.g. $85.00)" 
-          placeholderTextColor={colors.textMuted} 
-          value={price} 
-          onChangeText={setPrice} 
-          style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-        />
-        <TextInput 
-          placeholder="Compatibility (e.g. Toyota, Honda)" 
-          placeholderTextColor={colors.textMuted} 
-          value={compatibility} 
-          onChangeText={setCompatibility} 
-          style={[styles.formInput, { color: colors.text, borderColor: colors.border }]} 
-        />
-
-        <Text style={{ color: colors.text, fontWeight: '800', marginTop: 16, marginBottom: 8 }}>Product Photos (Max 3)</Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-          {[img1, img2, img3].map((img, idx) => {
-            if (!img) {
-              return (
-                <TouchableOpacity key={idx} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }} onPress={async () => {
-                  const uri = await promptImagePicker();
-                  if (uri) {
-                    const uploaded = await uploadImage(uri, 'spare-images');
-                    if (idx === 0) setImg1(uploaded);
-                    else if (idx === 1) setImg2(uploaded);
-                    else if (idx === 2) setImg3(uploaded);
-                  }
-                }}>
-                  <Ionicons name="camera-outline" size={24} color={colors.textMuted} />
-                </TouchableOpacity>
-              );
-            }
-            return (
-              <View key={idx} style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden' }}>
-                <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} />
-                <TouchableOpacity style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 2 }} onPress={() => {
-                  if (idx === 0) setImg1('');
-                  else if (idx === 1) setImg2('');
-                  else if (idx === 2) setImg3('');
-                }}>
-                  <Ionicons name="close" size={16} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            );
-          })}
+        <View style={styles.formCardHeader}>
+          <View style={[styles.formHeaderIconBg, { backgroundColor: colors.success + '15' }]}>
+            <Ionicons name="sparkles" size={20} color={colors.success} />
+          </View>
+          <View style={{ marginLeft: 12 }}>
+            <Text style={[styles.formTitle, { color: colors.text }]}>Add Catalog Item</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>Introduce a new auto part or mechanic service to buyers.</Text>
+          </View>
         </View>
 
-        <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.primary, marginTop: 8 }]} onPress={saveProduct} disabled={saving}>
-          <Text style={styles.submitBtnText}>{saving ? 'Adding...' : 'Publish Listing'}</Text>
-        </TouchableOpacity>
+        <View style={styles.formGrid}>
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Part/Item Name</Text>
+            <TextInput 
+              placeholder="e.g. Ceramic Front Brake Pads" 
+              placeholderTextColor={colors.textMuted} 
+              value={name} 
+              onChangeText={setName} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Category / Section</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={{ gap: 6, paddingVertical: 4, alignItems: 'center' }}
+            >
+              {CAR_PART_CATEGORIES.map((cat) => {
+                const isSelected = category.toLowerCase() === cat.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => setCategory(cat)}
+                    style={[
+                      styles.categoryPill,
+                      { backgroundColor: colors.bg, borderColor: colors.border },
+                      isSelected && { backgroundColor: colors.primary, borderColor: colors.primary }
+                    ]}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: isSelected ? '#FFF' : colors.textMuted }}>{cat}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TextInput 
+              placeholder="Or enter a custom category..." 
+              placeholderTextColor={colors.textMuted} 
+              value={category} 
+              onChangeText={setCategory} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Retail Price</Text>
+            <TextInput 
+              placeholder="e.g. $85.00" 
+              placeholderTextColor={colors.textMuted} 
+              value={price} 
+              onChangeText={setPrice} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Compatibility Requirements</Text>
+            <TextInput 
+              placeholder="e.g. Toyota Corolla 2015-2020" 
+              placeholderTextColor={colors.textMuted} 
+              value={compatibility} 
+              onChangeText={setCompatibility} 
+              style={[styles.formInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} 
+            />
+          </View>
+
+          <Text style={{ color: colors.text, fontWeight: '800', marginTop: 12, marginBottom: 8, fontSize: 13 }}>Product Photos (Max 3)</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+            {[img1, img2, img3].map((img, idx) => {
+              if (!img) {
+                return (
+                  <TouchableOpacity key={idx} style={{ width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }} onPress={async () => {
+                    const uri = await promptImagePicker();
+                    if (uri) {
+                      const uploaded = await uploadImage(uri, 'spare-images');
+                      if (idx === 0) setImg1(uploaded);
+                      else if (idx === 1) setImg2(uploaded);
+                      else if (idx === 2) setImg3(uploaded);
+                    }
+                  }}>
+                    <Ionicons name="camera-outline" size={24} color={colors.textMuted} />
+                  </TouchableOpacity>
+                );
+              }
+              return (
+                <View key={idx} style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                  <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} />
+                  <TouchableOpacity style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 2 }} onPress={() => {
+                    if (idx === 0) setImg1('');
+                    else if (idx === 1) setImg2('');
+                    else if (idx === 2) setImg3('');
+                  }}>
+                    <Ionicons name="close" size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.primary, marginTop: 8 }]} onPress={saveProduct} disabled={saving}>
+            <Text style={styles.submitBtnText}>{saving ? 'Cataloguing item...' : 'Publish Listing'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
@@ -956,11 +1296,11 @@ function ShopOrdersReceived({ shop }: { shop: any }) {
 
   function getStatusStyle(status: string) {
     switch (status) {
-      case 'Pending': return { bg: '#FEF3C7', text: '#D97706' }; // Amber
-      case 'Accepted': return { bg: '#E0E7FF', text: '#4F46E5' }; // Indigo
-      case 'Completed': return { bg: '#D1FAE5', text: '#059669' }; // Emerald
-      case 'Cancelled': return { bg: '#FEE2E2', text: '#DC2626' }; // Red
-      default: return { bg: '#E2E8F0', text: '#64748B' };
+      case 'Pending': return { bg: '#FEF3C7', text: '#D97706', dot: '#F59E0B' };
+      case 'Accepted': return { bg: '#E0E7FF', text: '#4F46E5', dot: '#6366F1' };
+      case 'Completed': return { bg: '#D1FAE5', text: '#059669', dot: '#10B981' };
+      case 'Cancelled': return { bg: '#FEE2E2', text: '#DC2626', dot: '#EF4444' };
+      default: return { bg: '#E2E8F0', text: '#64748B', dot: '#94A3B8' };
     }
   }
 
@@ -970,42 +1310,55 @@ function ShopOrdersReceived({ shop }: { shop: any }) {
     <View style={{ flex: 1 }}>
       {orders.length === 0 ? (
         <View style={[styles.emptyCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, marginTop: 10 }]}>
-          <MaterialCommunityIcons name="inbox" size={38} color={colors.textMuted} />
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No orders received yet. Active purchases will display here in real-time.</Text>
+          <MaterialCommunityIcons name="inbox-outline" size={38} color={colors.textMuted} />
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No bookings or parts requests received yet. Active purchases will display here in real-time.</Text>
         </View>
       ) : (
-        <View style={styles.listContainer}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.listContainer, { paddingBottom: 24 }]}>
           {orders.map((item) => {
             const statusStyle = getStatusStyle(item.status);
             return (
-              <View key={item.id} style={[styles.orderCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              <View key={item.id} style={[styles.premiumOrderCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                {/* Header Row */}
                 <View style={styles.orderHeaderRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.orderProduct, { color: colors.text }]}>{item.product_name}</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>Qty: {item.quantity || 1} · {new Date(item.created_at).toLocaleDateString()}</Text>
+                    <View style={styles.row}>
+                      <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>Qty: {item.quantity || 1} · </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                    </View>
                   </View>
                   <View style={[styles.orderStatusBadge, { backgroundColor: statusStyle.bg }]}>
+                    <View style={[styles.orderStatusDot, { backgroundColor: statusStyle.dot }]} />
                     <Text style={[styles.orderStatusText, { color: statusStyle.text }]}>{item.status}</Text>
                   </View>
                 </View>
 
-                <View style={[styles.orderBuyerInfo, { borderTopColor: colors.border }]}>
-                  <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>Customer details:</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>📧 {item.buyer_email}</Text>
+                {/* Buyer Segment */}
+                <View style={[styles.orderBuyerInfo, { borderTopColor: colors.border, backgroundColor: colors.bg }]}>
+                  <Text style={{ color: colors.text, fontSize: 12, fontWeight: '700' }}>Customer Dossier:</Text>
+                  <View style={[styles.row, { marginTop: 6 }]}>
+                    <Ionicons name="mail" size={13} color={colors.textMuted} style={{ marginRight: 6 }} />
+                    <Text style={{ color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>{item.buyer_email}</Text>
+                  </View>
                   {item.buyer_phone && (
-                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>📞 {item.buyer_phone}</Text>
+                    <View style={[styles.row, { marginTop: 4 }]}>
+                      <Ionicons name="call" size={13} color={colors.textMuted} style={{ marginRight: 6 }} />
+                      <Text style={{ color: colors.textMuted, fontSize: 11 }}>{item.buyer_phone}</Text>
+                    </View>
                   )}
                 </View>
 
+                {/* Action Row */}
                 {item.status !== 'Completed' && item.status !== 'Cancelled' && (
-                  <View style={[styles.orderActions, { borderTopColor: colors.border }]}>
+                  <View style={styles.orderActions}>
                     {item.status === 'Pending' && (
                       <>
                         <TouchableOpacity style={[styles.orderActionBtn, { backgroundColor: colors.primary }]} onPress={() => updateOrderStatus(item.id, 'Accepted')}>
-                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>Accept</Text>
+                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }}>Accept Order</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.orderActionBtn, { backgroundColor: colors.danger }]} onPress={() => updateOrderStatus(item.id, 'Cancelled')}>
-                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>Cancel</Text>
+                        <TouchableOpacity style={[styles.orderActionBtn, { backgroundColor: colors.danger + '15' }]} onPress={() => updateOrderStatus(item.id, 'Cancelled')}>
+                          <Text style={{ color: colors.danger, fontWeight: '800', fontSize: 11 }}>Reject</Text>
                         </TouchableOpacity>
                       </>
                     )}
@@ -1013,10 +1366,10 @@ function ShopOrdersReceived({ shop }: { shop: any }) {
                     {item.status === 'Accepted' && (
                       <>
                         <TouchableOpacity style={[styles.orderActionBtn, { backgroundColor: colors.success }]} onPress={() => updateOrderStatus(item.id, 'Completed')}>
-                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>Complete</Text>
+                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }}>Complete</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.orderActionBtn, { backgroundColor: colors.danger }]} onPress={() => updateOrderStatus(item.id, 'Cancelled')}>
-                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>Cancel</Text>
+                        <TouchableOpacity style={[styles.orderActionBtn, { backgroundColor: colors.danger + '15' }]} onPress={() => updateOrderStatus(item.id, 'Cancelled')}>
+                          <Text style={{ color: colors.danger, fontWeight: '800', fontSize: 11 }}>Cancel</Text>
                         </TouchableOpacity>
                       </>
                     )}
@@ -1025,7 +1378,7 @@ function ShopOrdersReceived({ shop }: { shop: any }) {
               </View>
             );
           })}
-        </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -1036,7 +1389,7 @@ function ShopOrdersReceived({ shop }: { shop: any }) {
    ============================================================================ */
 const styles = StyleSheet.create({
   shopManagerContainer: {
-    marginTop: 8,
+    flex: 1,
   },
   center: {
     paddingVertical: 40,
@@ -1047,32 +1400,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  formCard: {
-    padding: 16,
-    borderRadius: 16,
+  heroCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderLeftWidth: 4,
+    marginBottom: 22,
   },
-  formTitle: {
-    fontSize: 16,
+  heroLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  heroTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    marginBottom: 14,
+  },
+  heroSub: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  heroIconBg: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formCard: {
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  formCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    marginBottom: 18,
+  },
+  formHeaderIconBg: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formTitle: {
+    fontSize: 15,
+    fontWeight: '800',
   },
   formGrid: {
-    gap: 12,
+    gap: 14,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   formInput: {
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 14,
-    height: 46,
-    fontSize: 14,
+    height: 44,
+    fontSize: 13,
     fontWeight: '600',
   },
   imagePickerBadge: {
@@ -1087,16 +1481,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   pickerPreview: {
-    width: 64,
-    height: 64,
+    width: 60,
+    height: 60,
     borderRadius: 12,
   },
   pickerSubBtn: {
     marginTop: 4,
     paddingVertical: 2,
+  },
+  trashBtn: {
+    padding: 8,
+    borderRadius: 10,
   },
   locationToggle: {
     flexDirection: 'row',
@@ -1105,39 +1503,46 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
   },
-  toggleBtn: {
-    flex: 1,
-    height: 40,
+  locationToggleIconBg: {
+    width: 32,
+    height: 32,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(156, 163, 175, 0.15)',
+  },
+  toggleBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   toggleBtnText: {
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12,
   },
   submitBtn: {
-    height: 48,
+    height: 46,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
   },
   submitBtnText: {
     color: '#fff',
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 13,
   },
   listTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-    marginBottom: 10,
-    marginTop: 8,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   emptyCard: {
-    padding: 30,
-    borderRadius: 16,
+    padding: 34,
+    borderRadius: 20,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1145,30 +1550,26 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 10,
     lineHeight: 18,
-    maxWidth: 240,
+    maxWidth: 260,
   },
   listContainer: {
     gap: 12,
   },
   shopCard: {
     flexDirection: 'row',
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     padding: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
   },
   shopImage: {
-    width: 76,
-    height: 76,
-    borderRadius: 12,
+    width: 68,
+    height: 68,
+    borderRadius: 14,
   },
   shopInfo: {
     flex: 1,
@@ -1179,16 +1580,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
   },
   shopName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     flex: 1,
+    marginRight: 6,
   },
   shopDistance: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
+  },
+  miniStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  miniStatusText: {
+    fontSize: 9,
+    fontWeight: '800',
   },
   typeBadge: {
     paddingHorizontal: 8,
@@ -1196,8 +1606,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
     textTransform: 'uppercase',
   },
   ratingText: {
@@ -1205,79 +1615,249 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   shopPhone: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
   },
 
   /* Dashboard Styles */
   dashboardRoot: {
     flex: 1,
-    paddingBottom: 16,
   },
-  quickAccessBtn: {
-    flex: 1,
-    height: 85,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  premiumHeaderContainerImage: {
+    height: 92,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  quickAccessText: {
-    color: '#E5E7EB',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 8,
+  headerImageContent: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    padding: 8,
   },
-  editorContainer: {
-    paddingBottom: 24,
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
+  },
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  premiumBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    marginRight: 4,
+  },
+  premiumShopName: {
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  premiumSubText: {
+    fontSize: 10.5,
+    fontWeight: '700',
   },
 
-  /* Order Styles */
-  orderCard: {
+  /* Quick Access Carousel styles */
+  quickAccessWrapper: {
+    marginBottom: 4,
+  },
+  quickAccessScroll: {
+    paddingHorizontal: 0,
+    gap: 8,
+  },
+  quickAccessBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  quickAccessIconBg: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  quickAccessText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  /* Search & Filter Styles */
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+    height: 40,
+    gap: 12,
+  },
+  categoryScroll: {
+    paddingHorizontal: 0,
+    gap: 10,
+    paddingVertical: 2,
+    alignItems: 'center',
+  },
+  catBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    gap: 6,
+    minWidth: 90,
+    justifyContent: 'center',
+  },
+  catLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  categoryPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  categoryPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  /* Premium Product Cards */
+  premiumProductCard: {
+    width: '48%',
     borderRadius: 16,
     borderWidth: 1,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
+    padding: 10,
+    marginBottom: 4,
+    flexDirection: 'column',
+  },
+  productImageContainer: {
+    width: '100%',
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  bookmarkOverlay: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+  },
+  productDetailsContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  premiumProductName: {
+    fontSize: 13,
+    fontWeight: '800',
+    flex: 1,
+  },
+  premiumProductPrice: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  premiumProductCompat: {
+    fontSize: 10,
+  },
+  productActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  actionIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    height: 28,
+    borderRadius: 8,
+  },
+
+  /* Premium Order Card */
+  premiumOrderCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
   },
   orderHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 8,
   },
   orderProduct: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
   orderStatusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 8,
   },
+  orderStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
   orderStatusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
   },
   orderBuyerInfo: {
     borderTopWidth: 1,
-    marginTop: 10,
+    marginTop: 8,
     paddingTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   orderActions: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    marginTop: 12,
-    paddingTop: 10,
+    marginTop: 10,
     gap: 8,
   },
   orderActionBtn: {
     flex: 1,
-    height: 36,
+    height: 32,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1285,24 +1865,44 @@ const styles = StyleSheet.create({
 
   /* Warning / Activation Card */
   warningCard: {
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1.5,
+    padding: 24,
+    borderRadius: 20,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
   },
+  warningIconBg: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
   warningTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    marginTop: 10,
   },
   warningText: {
     textAlign: 'center',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     marginTop: 6,
-    maxWidth: 285,
+    maxWidth: 240,
     fontWeight: '600',
+  },
+  editorContainer: {
+    paddingBottom: 24,
+  },
+  gridContainer: {
+    paddingBottom: 24,
+  },
+  gridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'flex-start',
+    paddingHorizontal: 2,
   },
 });

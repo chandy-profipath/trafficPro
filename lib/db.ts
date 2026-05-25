@@ -202,6 +202,14 @@ export async function insertHazard(payload: {
   return data as DBHazard;
 }
 
+export async function deleteHazard(id: string) {
+  const { error } = await supabase
+    .from('hazards')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
 export function subscribeHazards(onInsert: (h: DBHazard) => void, onDelete?: (id: string) => void) {
   const channel = supabase
     .channel('hazards-realtime')

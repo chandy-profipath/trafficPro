@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Image, TextInput as RNTextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Image, TextInput as RNTextInput, Linking } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Feather from '@expo/vector-icons/Feather';
@@ -176,7 +176,15 @@ export default function MechanicsSheet({ onSelect, onChat }: Props) {
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1.5 }]}
-              onPress={() => Alert.alert('Calling', `${m.name}\n${m.phone}`)}
+              onPress={() => {
+                if (m.phone) {
+                  Linking.openURL(`tel:${m.phone}`).catch(() => {
+                    Alert.alert('Call Failed', 'Dialer is not supported on this device.');
+                  });
+                } else {
+                  Alert.alert('No Phone Number', 'This mechanic has not registered a phone hotline.');
+                }
+              }}
             >
               <Feather name="phone" size={14} color={colors.primary} />
               <Text style={[styles.actionText, { color: colors.text }]}>Call</Text>

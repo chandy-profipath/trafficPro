@@ -66,7 +66,7 @@ export default function ManageShopsPage() {
         <View style={{ width: 40 }} />
       </View>
 
-      <View style={{ flex: 1, padding: 16 }}>
+      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 0 }}>
         <ShopManager user={user} userX={userX} userY={userY} />
       </View>
     </SafeAreaView>
@@ -76,13 +76,13 @@ export default function ManageShopsPage() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, marginBottom: 12 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, marginBottom: 0 },
   back: { 
-    width: 40,
-    height: 40,
-    borderRadius: 12, 
+    width: 34,
+    height: 34,
+    borderRadius: 10, 
     justifyContent: 'center', 
     alignItems: 'center',
   },
-  title: { fontSize: 18, fontWeight: '800' }
+  title: { fontSize: 16, fontWeight: '800' }
 });
