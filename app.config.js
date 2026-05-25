@@ -1,0 +1,55 @@
+module.exports = {
+  expo: {
+    name: "Driver Alert Navigator",
+    slug: "alerts-roads-driver",
+    version: "1.0.0",
+    orientation: "default",
+    icon: "./assets/images/icon.png",
+    scheme: "alerts-roads-driver",
+    userInterfaceStyle: "automatic",
+    newArchEnabled: true,
+    ios: {
+      supportsTablet: true,
+      config: {
+        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      },
+    },
+    android: {
+      permissions: ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      adaptiveIcon: {
+        foregroundImage: "./assets/images/adaptive-icon.png",
+        backgroundColor: "#ffffff",
+      },
+      edgeToEdgeEnabled: true,
+      config: {
+        googleMaps: {
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+        },
+      },
+    },
+    web: {
+      bundler: "metro",
+      output: "static",
+      favicon: "./assets/images/favicon.png",
+    },
+    plugins: [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          image: "./assets/images/splash-icon.png",
+          imageWidth: 200,
+          resizeMode: "contain",
+          backgroundColor: "#ffffff",
+        },
+      ],
+      "expo-web-browser",
+    ],
+    experiments: {
+      typedRoutes: true,
+    },
+    runtimeVersion: {
+      policy: "sdkVersion",
+    },
+  },
+};
